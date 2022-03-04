@@ -4,3 +4,9 @@ NodeMCU setup:
 3) In arduino IDE: tools->board->select NODEMCU v1.0
 
 You should be done, try to load an example code to see if everything works. For example try blink.
+
+OLED display PIN connection (left = screen, right = NodeMCU):
+1) SDA to D2
+2) SCL to D1 
+3) GND to GND
+4) Vcc to 3v3
