@@ -20,4 +20,4 @@ You should be done, try to load an example code to see if everything works. For 
 4) Passare al lato opposto e collegare il pin del bottone, che è in cortocircuito con la resistenza, al pin D6 del NodeMCU
 
 Dopo queste parole spese inutilmente, la foto di seguito sarà sicuramente di maggiore aiuto:
-![alt text](https://user-images.githubusercontent.com/51931398/156933949-fe1de5bd-bd80-405c-b1ec-181c3da9cd92.png)
+<img src="https://user-images.githubusercontent.com/51931398/156933949-fe1de5bd-bd80-405c-b1ec-181c3da9cd92.png" alt="Alt text" style = "max-width: 300px">
