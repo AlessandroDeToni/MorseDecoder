@@ -13,7 +13,7 @@ You should be done, try to load an example code to see if everything works. For 
 3) GND a GND
 4) Vcc a 3v3
 
-## connessione bottone a NodeMCU:
+## Connessione bottone a NodeMCU:
 1) Posizionare il bottone al centro della breadboard
 2) Scegliere un lato e collegare un pin a 3.3V attraverso un cavo
 3) Nello stesso lato, collegare l'altro pin a 0V attrverso una resistenza da 1kOhm
