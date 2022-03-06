@@ -7,8 +7,17 @@
 
 You should be done, try to load an example code to see if everything works. For example try blink.
 
-## OLED display PIN connection (left = screen, right = NodeMCU):
-1) SDA to D2
-2) SCL to D1 
-3) GND to GND
-4) Vcc to 3v3
+## OLED display connessione PIN (sinistra = display, destra = NodeMCU):
+1) SDA a D2
+2) SCL a D1 
+3) GND a GND
+4) Vcc a 3v3
+
+## connessione bottone a NodeMCU:
+1) Posizionare il bottone al centro della breadboard
+2) Scegliere un lato e collegare un pin a 3.3V attraverso un cavo
+3) Nello stesso lato, collegare l'altro pin a 0V attrverso una resistenza da 1kOhm
+4) Passare al lato opposto e collegare il pin del bottone, che è in cortocircuito con la resistenza, al pin D6 del NodeMCU
+
+Dopo queste parole spese inutilmente, la foto di seguito sarà sicuramente di maggiore aiuto:
+![image](https://user-images.githubusercontent.com/51931398/156933949-fe1de5bd-bd80-405c-b1ec-181c3da9cd92.png)
