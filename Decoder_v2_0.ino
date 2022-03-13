@@ -11,7 +11,8 @@
 //Display constructor
 U8G2_SH1106_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0, U8X8_PIN_NONE);
 //contatore che viene incrementato per visualizzare i punti e le linee in sequenza sul display
-int displayPosition = 0;
+int upperDisplayPosition = 0;
+int lowerDisplayPosition = 0;
 
 /*------------------------------------------BUTTON------------------------------------------*/
 const int buttonPin = D6; //defines the name of the pin connected to the button
@@ -19,8 +20,8 @@ int buttonState = 0;  // value read from the button
 
 /*------------------------------------------TIMING------------------------------------------*/
 const int minDuration = 10;                              // Minimum length of a dot or gap. Anything less is a bounce or static
-const int maxDotDuration = 500;                           // Maximum length of a dot. Minimum length of a dash
-const int maxDashDuration = 1500;                         // The maximum length of a dash. Any more and it is considered stuck
+const int maxDotDuration = 250;                           // Maximum length of a dot. Minimum length of a dash
+const int maxDashDuration = 1000;                         // The maximum length of a dash. Any more and it is considered stuck
 
 /*const int minWordGap;                               // Anything less is considered a part of a word or character*/
 const int minCharacterGap = 2000;                          // Anything less is considered part of a character
@@ -102,17 +103,17 @@ void loop() {
     //u8g2.clearBuffer();
     if (lastMarkType == 0) {
       currentCharacter[bufferPosition] = 1; //aggiorna il buffer per comunicare che l'i-esimo segnale è un punto
-      u8g2.drawStr(displayPosition, 0, ".");
+      u8g2.drawStr(upperDisplayPosition, 0, ".");
       u8g2.updateDisplay();
-      displayPosition = displayPosition + 5;
+      upperDisplayPosition = upperDisplayPosition + 10;
       bufferPosition++;
       stateNow = 1;
     }
     else {
       currentCharacter[bufferPosition] = 2; //aggiorna il buffer per comunicare che l'i-esimo segnale è una linea
-      u8g2.drawStr(displayPosition + 1, 0, "_");
+      u8g2.drawStr(upperDisplayPosition + 1, 0, "-");
       u8g2.updateDisplay();
-      displayPosition = displayPosition + 5;
+      upperDisplayPosition = upperDisplayPosition + 14;
       bufferPosition++;
       stateNow = 1;
     }
@@ -130,7 +131,7 @@ void loop() {
 /*------------------------------------------DISPLAY-----------------------------------------*/
 //Sets up the characteristics of the display (Font type, color, starting position etc.)
 void u8g2_prepare() {
-  u8g2.setFont(u8g2_font_6x10_tf);
+  u8g2.setFont(u8g2_font_courB24_tf);
   u8g2.setFontRefHeightExtendedText();
   u8g2.setDrawColor(1);
   u8g2.setFontPosTop();
@@ -195,26 +196,24 @@ void decodesignal() {
     currentCharacterNumber = 37;
   }
   
-  //u8g2.setCursor(0, 40);
-  //u8g2.print(currentCharacterNumber);
   // Reset character array - Even if a match was not found, reset it
-  //u8g2.setCursor(0, 40);
   for (int b = 0; b < 5; b++) {
     //u8g2.print(currentCharacter[b]);
     currentCharacter[b] = 0;
   }
 
   bufferPosition = 0; // Reset the buffer position back to 0
-  displayPosition = 0; // Reset the display position back to 0
+  upperDisplayPosition = 0; // Reset the display position back to 0
   character = morsePlain[currentCharacterNumber];
-  u8g2.setCursor(0, 20);
+  u8g2.setCursor(lowerDisplayPosition, 30);
   u8g2.print(character);
-  //u8g2.setCursor(10, 20);
-  //u8g2.print("ENTRATO");
   u8g2.updateDisplay();
-  delay(3000);
-  u8g2.clearDisplay();
+  delay(2000);
+  //u8g2.clearDisplay();
   u8g2.home();
-  
-
+  u8g2.setDrawColor(0);
+  u8g2.drawBox(0,0,128,29);
+  u8g2.updateDisplay();
+  u8g2.setDrawColor(1);
+  lowerDisplayPosition = lowerDisplayPosition + 20;
 }
