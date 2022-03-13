@@ -76,6 +76,10 @@ byte morseCode[][5] = {   //  1 = punto, 2 = linea, 0 = non utilizzato
 char morsePlain[37] = {'A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S', //alfabeto per decodifica
                        'T','U','V','W','X','Y','Z','0','1','2','3','4','5','6','7','8','9','?'};
 
+// ===========================================================================================
+//                                            SETUP
+// ===========================================================================================
+
 void setup() {
  
   u8g2.begin();   //inizializza il display
@@ -86,6 +90,10 @@ void setup() {
   attachInterrupt(digitalPinToInterrupt(buttonPin), morse_ISR, CHANGE); //Definisce morse_ISR come funzione risolutrice di INTERRUPT. 
                                                                         //Viene lanciato un interrupt ad ogni volta che su D6 vi è una variazione
 }
+
+// ===========================================================================================
+//                                           LOOP
+// ===========================================================================================
 
 void loop() {
 
