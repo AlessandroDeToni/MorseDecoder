@@ -6,42 +6,35 @@
 // ===========================================================================================
 
 /*------------------------------------------DISPLAY-----------------------------------------*/
-//Display constants
-#define time_delay 500
-//Display constructor
-U8G2_SH1106_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0, U8X8_PIN_NONE);
-//contatore che viene incrementato per visualizzare i punti e le linee in sequenza sul display
-int upperDisplayPosition = 0;
-int lowerDisplayPosition = 0;
+U8G2_SH1106_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0, U8X8_PIN_NONE); //Costruttore display
+int upperDisplayPosition = 0;                                    //contatore per visualizzare i punti e le linee in sequenza sul display
+int lowerDisplayPosition = 0;                                    //contatore per visualizzare le lettere in sequenza sul display
 
 /*------------------------------------------BUTTON------------------------------------------*/
-const int buttonPin = D6; //defines the name of the pin connected to the button
-int buttonState = 0;  // value read from the button
+const int buttonPin = D6; //Nom
+int buttonState = 0;  //Stato del bottone 1=premuto 0=rilasciato
 
 /*------------------------------------------TIMING------------------------------------------*/
-const int minDuration = 10;                              // Minimum length of a dot or gap. Anything less is a bounce or static
-const int maxDotDuration = 250;                           // Maximum length of a dot. Minimum length of a dash
-const int maxDashDuration = 1000;                         // The maximum length of a dash. Any more and it is considered stuck
+const int minDuration = 10;                               // Minima durata di un punto. In questo modo attuiamo il debouncing del bottone
+const int maxDotDuration = 250;                           // Massima durata di un punto. Minima durata di una linea
+const int maxDashDuration = 1000;                         // Massima durata di una linea
 
-/*const int minWordGap;                               // Anything less is considered a part of a word or character*/
-const int minCharacterGap = 2000;                          // Anything less is considered part of a character
-int gapStart = 0;
+const int minCharacterGap = 2000;                         // Tempi maggiori di questa quantità significano che la lettera può essere decodificata
 /*------------------------------------------INTERRUPT-----------------------------------------*/
-// Variables for the interrupt
-volatile bool stateNow = 1;                   // Current receive state - 0 = within a mark, 1 = within a gap
-volatile unsigned long lastInterruptTime = 0; // Time of the last interupt in milliseconds
-//volatile bool newDataFlag = 0;                // New mark received flag - 1 = there is new data to process
-volatile bool lastMarkType = 0;               // Stores the last mark - 0 = dot, 1 = dash
-volatile unsigned int lastMarkLength;         // Length of last mark in milliseconds
+volatile bool receivedSomething = 0;                      // Definisce in che stato è la ricezione: 0 = non ho ricevuto nulla, 1 = ho ricevuto un punto o linea
+                                                          // che il pulsante venga premuto
+volatile unsigned long lastInterruptTime = 0;             // Istante relativo all'ultimo interrupt in mS
+volatile bool lastMarkType = 0;                           // Ricorda l'ultimo segnale: 0 = punto, 1 = linea
+volatile unsigned int lastMarkLength;                     // Lunghezza dell'ultimo segnale in mS
 
-byte currentCharacter [5] = {0, 0, 0, 0, 0}; // Array of dots and dashes of the current received character
-byte bufferPosition = 0;                      // The current bit/mark position received for the current character (currentCharacter array)
-byte currentCharacterNumber;                  // Plain text character array number of current morse character
-bool spaceFlag = 0;                          // A flag to control when to print a space 0 = no, 1= yes*/
+byte currentCharacter [5] = {0, 0, 0, 0, 0};              // Ricorda gli ultimi 5 segnali ricevuti: 1 = punto, 2 = linea, 0 = non utilizzato
+byte bufferPosition = 0;                                  // Posizione di currentCharacter
+byte currentCharacterNumber;                              // Numero utile alla decodifica del carattere inviato. Viene utilizzato in morsePlain
+                                                          // per selezionare la lettera corrispondente
 
 /*------------------------------------------DECODIFICA-----------------------------------------*/
 
-byte morseCode[][5] = {   //  1 = dot, 2 = dash, 0 = not used
+byte morseCode[][5] = {   //  1 = punto, 2 = linea, 0 = non utilizzato
   {1, 2, 0, 0, 0}, //  [0]    A   .-
   {2, 1, 1, 1, 0}, //  [1]    B   -...
   {2, 1, 2, 1, 0}, //  [2]    C   -.-.
@@ -80,45 +73,51 @@ byte morseCode[][5] = {   //  1 = dot, 2 = dash, 0 = not used
   {2, 2, 2, 2, 1}, //  [35]   9   ----.
 };
 
-char morsePlain[37] = {'A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S',
+char morsePlain[37] = {'A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S', //alfabeto per decodifica
                        'T','U','V','W','X','Y','Z','0','1','2','3','4','5','6','7','8','9','?'};
 
-char character;
+// ===========================================================================================
+//                                            SETUP
+// ===========================================================================================
 
 void setup() {
-  u8g2.begin();   //sets the display up
-  u8g2_prepare(); //defines display configuration
-  //Serial.begin(9600);
-  // initialize the pushbutton pin as an input:
-  pinMode(buttonPin, INPUT);
+ 
+  u8g2.begin();   //inizializza il display
+  u8g2_prepare(); //definisce le caratteristiche del display (per es. il font)
+  
+  pinMode(buttonPin, INPUT); // inizializza il pin per la lettura del bottone (D6) come INPUT
 
-  // Attach an interrupt. Set to trigger on rising AND falling edges to catch beginning and end of marks
-  attachInterrupt(digitalPinToInterrupt(buttonPin), morse_ISR, CHANGE);
+  attachInterrupt(digitalPinToInterrupt(buttonPin), morse_ISR, CHANGE); //Definisce morse_ISR come funzione risolutrice di INTERRUPT. 
+                                                                        //Viene lanciato un interrupt ad ogni volta che su D6 vi è una variazione
 }
+
+// ===========================================================================================
+//                                           LOOP
+// ===========================================================================================
 
 void loop() {
 
-  //Write to display:
-  if (stateNow == 0) {
-    //u8g2.clearBuffer();
+  //Scrivi sul display un punto o una linea:
+  if (receivedSomething == 1) { 
     if (lastMarkType == 0) {
       currentCharacter[bufferPosition] = 1; //aggiorna il buffer per comunicare che l'i-esimo segnale è un punto
-      u8g2.drawStr(upperDisplayPosition, 0, ".");
+      u8g2.drawStr(upperDisplayPosition, 0, "."); //inserisce nel buffer interno del display un punto in posizione (upperDisplayPosition, 0)
       u8g2.updateDisplay();
-      upperDisplayPosition = upperDisplayPosition + 10;
+      upperDisplayPosition = upperDisplayPosition + 10; //Sposta la posizione di 10 pixel 
       bufferPosition++;
-      stateNow = 1;
+      receivedSomething = 0;
     }
     else {
       currentCharacter[bufferPosition] = 2; //aggiorna il buffer per comunicare che l'i-esimo segnale è una linea
-      u8g2.drawStr(upperDisplayPosition + 1, 0, "-");
+      u8g2.drawStr(upperDisplayPosition + 1, 0, "-"); //inserisce nel buffer interno del display una linea in posizione (upperDisplayPosition, 0)
       u8g2.updateDisplay();
-      upperDisplayPosition = upperDisplayPosition + 14;
+      upperDisplayPosition = upperDisplayPosition + 14; //Sposta la posizione di 14 pixel 
       bufferPosition++;
-      stateNow = 1;
+      receivedSomething = 0;
     }
   }
 
+  //Se sono passati più di minCharacterGap mS da quando il tasto è stato premuto, la serie di punti e linee viene decodificata
   if ((millis() - lastInterruptTime) > minCharacterGap && bufferPosition != 0) {
     decodesignal();
   }
@@ -129,7 +128,7 @@ void loop() {
 // ===========================================================================================
 
 /*------------------------------------------DISPLAY-----------------------------------------*/
-//Sets up the characteristics of the display (Font type, color, starting position etc.)
+//Setta le caratteristiche del display (Font, colore, posizione di inzio ecc.)
 void u8g2_prepare() {
   u8g2.setFont(u8g2_font_courB24_tf);
   u8g2.setFontRefHeightExtendedText();
@@ -139,45 +138,41 @@ void u8g2_prepare() {
 }
 
 /*------------------------------------------INTERRUPT-----------------------------------------*/
-//Handles the interrupt originated by the button so that we are able to write dot and dashes
-ICACHE_RAM_ATTR void morse_ISR() { //ICACHE_RAM_ATTR needed to save the ISR in the internal RAM
-  // This interrupt is triggered on all changes. It determines if a dot or dash has just been received.
-  // Gaps/spaces are processed in other functions via the main loop.
-
+//Risponde all'interrupt generato dal bottone e comunica se si tratta di un punto o di una linea
+ICACHE_RAM_ATTR void morse_ISR() { //ICACHE_RAM_ATTR necessaro per salvere la ISR nella ram interna (IRAM)
+  
   unsigned long interruptTime = millis();
 
-  // Check if it is a bit of static/bounce
+  // Controllo che sia effettivamente una pressione o sia un interrupt dovuto al bouncing del bottone
+  
   if (interruptTime - lastInterruptTime >= minDuration) {
 
-    // Are we starting or ending a dot/dash? - HIGH is off
-    if (digitalRead(buttonPin) == LOW) { // We have just ended a dot or dash
-      lastMarkLength = interruptTime - lastInterruptTime; // Get length in milliseconds
+    // Controlla se il bottone è stato rilasciato, da questo capiamo l'istante da cui calcolare la durata del segnale
+    if (digitalRead(buttonPin) == LOW) {  //Il punto o la linea è appena terminato
+      lastMarkLength = interruptTime - lastInterruptTime; // Calcolo della durata del segnale
 
-      // Was it a dot or a dash?
+      // E' un punto o una linea?
       if (lastMarkLength < maxDotDuration) {
-        lastMarkType = 0;                 // It's a dot
+        lastMarkType = 0;                 // E' un punto
       }
       else {
-        lastMarkType = 1;                 // It's a dash
+        lastMarkType = 1;                 // E' una linea
       }
-
-      //newDataFlag = 1;                    // Flag there is a new mark to process
-      stateNow = 0;                       // Set current state to nothing being currently sent
-      //digitalWrite(STATUS_LED_PIN, LOW);  // turn the LED off
+      receivedSomething = 1;              // Un punto o una linea è stato ricevuto, può essere messo a display
     }
-    else { // We are just starting a dot/dash
-
-      stateNow = 1; // Set current state to currently receving a mark
+    else {                                // Stiamo iniziando un punto o una linea
+      receivedSomething = 0;              // Non è stato ricevuto nulla
     }
   }
-
-  lastInterruptTime = interruptTime;      // Remember interrupt time for next time ******** than here ********
+  lastInterruptTime = interruptTime;      // Ricorda l'ultimo instante in cui è stato lanciato un interrupt
 }
 /*------------------------------------------DECODIFICA-----------------------------------------*/
 void decodesignal() {
   
-  bool matchFound = 0; // Tracks if a known character is found
-  // Loop through the known character codes and return the matching character or prosign if found
+  bool matchFound = 0; // Ricorda se è stata trovata una corrispondenza tra i segnali e un carattere
+  
+  //Cicla tra le righe della tabella contenente il codice morse, se trova 
+  //una corrispondenza salva il numero della riga in CurrentCharacterNumber
   for (int c = 0; c < 36; c++) {
     // There may be more efficient way to do this
     if (currentCharacter[0] == morseCode[c][0] &&
@@ -185,35 +180,34 @@ void decodesignal() {
         currentCharacter[2] == morseCode[c][2] &&
         currentCharacter[3] == morseCode[c][3] &&
         currentCharacter[4] == morseCode[c][4]){
-      // It's a match
-      currentCharacterNumber = c;  // Set number to match arrays
-      matchFound = 1; // flag that a match has been found
-      break;  // Break out of the loop
+      // Corrispondenza trovata
+      currentCharacterNumber = c;  
+      matchFound = 1; 
+      break;  // Esce dal loop
     }
   }
-
-  if (matchFound != 1) {
+  
+  if (matchFound != 1) {   // Corrispondenza non trovata
     currentCharacterNumber = 37;
   }
   
-  // Reset character array - Even if a match was not found, reset it
+  // Reinizializza il buffer di segnali 
   for (int b = 0; b < 5; b++) {
-    //u8g2.print(currentCharacter[b]);
     currentCharacter[b] = 0;
   }
 
-  bufferPosition = 0; // Reset the buffer position back to 0
-  upperDisplayPosition = 0; // Reset the display position back to 0
-  character = morsePlain[currentCharacterNumber];
-  u8g2.setCursor(lowerDisplayPosition, 30);
-  u8g2.print(character);
+  // Scrittura del carattere
+  bufferPosition = 0;                               // Resetta la posizione del buffer di segnali
+  upperDisplayPosition = 0;                         // Resetta la posizione della parte superiore del display
+  u8g2.setCursor(lowerDisplayPosition, 30);         // Setta la posizione bassa del display in cui print dovrà scrivere
+  u8g2.print(morsePlain[currentCharacterNumber]);   // scrittura della lettera decodificata
   u8g2.updateDisplay();
-  delay(2000);
-  //u8g2.clearDisplay();
-  u8g2.home();
-  u8g2.setDrawColor(0);
-  u8g2.drawBox(0,0,128,29);
+
+  // Pulizia della parte alta del display
+  u8g2.setDrawColor(0);                             // 0 significa: "cancella pixel"
+  u8g2.drawBox(0,0,128,29);                         // Disegno di una casella che cancella tutta la parte superiore dello schermo
   u8g2.updateDisplay();
-  u8g2.setDrawColor(1);
-  lowerDisplayPosition = lowerDisplayPosition + 20;
+  
+  u8g2.setDrawColor(1);                             // Ripristino del display in modalità scrittura
+  lowerDisplayPosition = lowerDisplayPosition + 20; // Aggiornamento della posizione bassa di scrittura
 }
