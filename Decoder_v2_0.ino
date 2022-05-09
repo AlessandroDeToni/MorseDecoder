@@ -12,6 +12,8 @@ int lowerDisplayPosition = 0;                                    //contatore per
 
 /*------------------------------------------BUTTON------------------------------------------*/
 const int buttonPin = D6; //Nom
+const int ledStartPin = D3; //Nom
+const int ledStopPin = D4; //Nom
 int buttonState = 0;  //Stato del bottone 1=premuto 0=rilasciato
 
 /*------------------------------------------TIMING------------------------------------------*/
@@ -20,9 +22,12 @@ const int maxDotDuration = 250;                           // Massima durata di u
 const int maxDashDuration = 1000;                         // Massima durata di una linea
 
 const int minCharacterGap = 2000;                         // Tempi maggiori di questa quantità significano che la lettera può essere decodificata
+const int maxPausa = 10000;                                // Tempi maggiori di questa quantità significano che la lettera può essere decodificata
+int startPause = 0;
+boolean pulireStandBy = false;
 /*------------------------------------------INTERRUPT-----------------------------------------*/
 volatile bool receivedSomething = 0;                      // Definisce in che stato è la ricezione: 0 = non ho ricevuto nulla, 1 = ho ricevuto un punto o linea
-                                                          // che il pulsante venga premuto
+// che il pulsante venga premuto
 volatile unsigned long lastInterruptTime = 0;             // Istante relativo all'ultimo interrupt in mS
 volatile bool lastMarkType = 0;                           // Ricorda l'ultimo segnale: 0 = punto, 1 = linea
 volatile unsigned int lastMarkLength;                     // Lunghezza dell'ultimo segnale in mS
@@ -30,7 +35,7 @@ volatile unsigned int lastMarkLength;                     // Lunghezza dell'ulti
 byte currentCharacter [5] = {0, 0, 0, 0, 0};              // Ricorda gli ultimi 5 segnali ricevuti: 1 = punto, 2 = linea, 0 = non utilizzato
 byte bufferPosition = 0;                                  // Posizione di currentCharacter
 byte currentCharacterNumber;                              // Numero utile alla decodifica del carattere inviato. Viene utilizzato in morsePlain
-                                                          // per selezionare la lettera corrispondente
+// per selezionare la lettera corrispondente
 
 /*------------------------------------------DECODIFICA-----------------------------------------*/
 
@@ -73,22 +78,26 @@ byte morseCode[][5] = {   //  1 = punto, 2 = linea, 0 = non utilizzato
   {2, 2, 2, 2, 1}, //  [35]   9   ----.
 };
 
-char morsePlain[37] = {'A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S', //alfabeto per decodifica
-                       'T','U','V','W','X','Y','Z','0','1','2','3','4','5','6','7','8','9','?'};
+char morsePlain[37] = {'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', //alfabeto per decodifica
+                       'T', 'U', 'V', 'W', 'X', 'Y', 'Z', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '?'
+                      };
 
 // ===========================================================================================
 //                                            SETUP
 // ===========================================================================================
 
 void setup() {
- 
+
   u8g2.begin();   //inizializza il display
-  u8g2_prepare(); //definisce le caratteristiche del display (per es. il font)
-  
+  standByWrite();
+
   pinMode(buttonPin, INPUT); // inizializza il pin per la lettura del bottone (D6) come INPUT
 
-  attachInterrupt(digitalPinToInterrupt(buttonPin), morse_ISR, CHANGE); //Definisce morse_ISR come funzione risolutrice di INTERRUPT. 
-                                                                        //Viene lanciato un interrupt ad ogni volta che su D6 vi è una variazione
+  pinMode(ledStartPin, OUTPUT); // inizializza il pin per la lettura del bottone (D6) come INPUT
+  pinMode(ledStopPin, OUTPUT); // inizializza il pin per la lettura del bottone (D6) come INPUT
+
+  attachInterrupt(digitalPinToInterrupt(buttonPin), morse_ISR, CHANGE); //Definisce morse_ISR come funzione risolutrice di INTERRUPT.
+  //Viene lanciato un interrupt ad ogni volta che su D6 vi è una variazione
 }
 
 // ===========================================================================================
@@ -98,12 +107,23 @@ void setup() {
 void loop() {
 
   //Scrivi sul display un punto o una linea:
-  if (receivedSomething == 1) { 
+  if (receivedSomething == 1) {
+    startPause = millis();
+
+    digitalWrite(ledStopPin, 1);
+    digitalWrite(ledStartPin, 0);
+
+    u8g2_prepare(u8g2_font_courB24_tf); //definisce le caratteristiche del display (per es. il font)
+
+    if (pulireStandBy) {
+      pulisciScritta();
+    }
+
     if (lastMarkType == 0) {
       currentCharacter[bufferPosition] = 1; //aggiorna il buffer per comunicare che l'i-esimo segnale è un punto
       u8g2.drawStr(upperDisplayPosition, 0, "."); //inserisce nel buffer interno del display un punto in posizione (upperDisplayPosition, 0)
       u8g2.updateDisplay();
-      upperDisplayPosition = upperDisplayPosition + 10; //Sposta la posizione di 10 pixel 
+      upperDisplayPosition = upperDisplayPosition + 10; //Sposta la posizione di 10 pixel
       bufferPosition++;
       receivedSomething = 0;
     }
@@ -111,9 +131,14 @@ void loop() {
       currentCharacter[bufferPosition] = 2; //aggiorna il buffer per comunicare che l'i-esimo segnale è una linea
       u8g2.drawStr(upperDisplayPosition + 1, 0, "-"); //inserisce nel buffer interno del display una linea in posizione (upperDisplayPosition, 0)
       u8g2.updateDisplay();
-      upperDisplayPosition = upperDisplayPosition + 14; //Sposta la posizione di 14 pixel 
+      upperDisplayPosition = upperDisplayPosition + 14; //Sposta la posizione di 14 pixel
       bufferPosition++;
       receivedSomething = 0;
+    }
+  } else {
+    if (millis() - startPause > maxPausa) {
+      startPause = millis();
+      standByWrite();
     }
   }
 
@@ -129,8 +154,8 @@ void loop() {
 
 /*------------------------------------------DISPLAY-----------------------------------------*/
 //Setta le caratteristiche del display (Font, colore, posizione di inzio ecc.)
-void u8g2_prepare() {
-  u8g2.setFont(u8g2_font_courB24_tf);
+void u8g2_prepare(const uint8_t* fontName) {
+  u8g2.setFont(fontName);
   u8g2.setFontRefHeightExtendedText();
   u8g2.setDrawColor(1);
   u8g2.setFontPosTop();
@@ -140,11 +165,11 @@ void u8g2_prepare() {
 /*------------------------------------------INTERRUPT-----------------------------------------*/
 //Risponde all'interrupt generato dal bottone e comunica se si tratta di un punto o di una linea
 ICACHE_RAM_ATTR void morse_ISR() { //ICACHE_RAM_ATTR necessaro per salvere la ISR nella ram interna (IRAM)
-  
+
   unsigned long interruptTime = millis();
 
   // Controllo che sia effettivamente una pressione o sia un interrupt dovuto al bouncing del bottone
-  
+
   if (interruptTime - lastInterruptTime >= minDuration) {
 
     // Controlla se il bottone è stato rilasciato, da questo capiamo l'istante da cui calcolare la durata del segnale
@@ -168,10 +193,12 @@ ICACHE_RAM_ATTR void morse_ISR() { //ICACHE_RAM_ATTR necessaro per salvere la IS
 }
 /*------------------------------------------DECODIFICA-----------------------------------------*/
 void decodesignal() {
-  
+
   bool matchFound = 0; // Ricorda se è stata trovata una corrispondenza tra i segnali e un carattere
-  
-  //Cicla tra le righe della tabella contenente il codice morse, se trova 
+  digitalWrite(ledStartPin, 1);
+  digitalWrite(ledStopPin, 0);
+
+  //Cicla tra le righe della tabella contenente il codice morse, se trova
   //una corrispondenza salva il numero della riga in CurrentCharacterNumber
   for (int c = 0; c < 36; c++) {
     // There may be more efficient way to do this
@@ -179,19 +206,19 @@ void decodesignal() {
         currentCharacter[1] == morseCode[c][1] &&
         currentCharacter[2] == morseCode[c][2] &&
         currentCharacter[3] == morseCode[c][3] &&
-        currentCharacter[4] == morseCode[c][4]){
+        currentCharacter[4] == morseCode[c][4]) {
       // Corrispondenza trovata
-      currentCharacterNumber = c;  
-      matchFound = 1; 
+      currentCharacterNumber = c;
+      matchFound = 1;
       break;  // Esce dal loop
     }
   }
-  
+
   if (matchFound != 1) {   // Corrispondenza non trovata
     currentCharacterNumber = 37;
   }
-  
-  // Reinizializza il buffer di segnali 
+
+  // Reinizializza il buffer di segnali
   for (int b = 0; b < 5; b++) {
     currentCharacter[b] = 0;
   }
@@ -203,11 +230,53 @@ void decodesignal() {
   u8g2.print(morsePlain[currentCharacterNumber]);   // scrittura della lettera decodificata
   u8g2.updateDisplay();
 
-  // Pulizia della parte alta del display
-  u8g2.setDrawColor(0);                             // 0 significa: "cancella pixel"
-  u8g2.drawBox(0,0,128,29);                         // Disegno di una casella che cancella tutta la parte superiore dello schermo
-  u8g2.updateDisplay();
-  
+  pulisciMorse();
+
   u8g2.setDrawColor(1);                             // Ripristino del display in modalità scrittura
   lowerDisplayPosition = lowerDisplayPosition + 20; // Aggiornamento della posizione bassa di scrittura
+}
+
+void pulisciMorse() {
+  u8g2.setDrawColor(0);                             // 0 significa: "cancella pixel"
+  u8g2.drawBox(0, 0, 128, 29);                      // Disegno di una casella che cancella tutta la parte superiore dello schermo
+  u8g2.updateDisplay();
+
+  u8g2.setDrawColor(1);                             // Ripristino del display in modalità scrittura
+}
+
+void pulisciScritta() {
+  pulireStandBy = false;
+
+  digitalWrite(ledStartPin, 0);
+  digitalWrite(ledStopPin, 1);
+
+  u8g2.setDrawColor(0);                             // 0 significa: "cancella pixel"
+  u8g2.drawBox(0, 30, 128, 300);                      // Disegno di una casella che cancella tutta la parte superiore dello schermo
+  u8g2.updateDisplay();
+
+  u8g2.setDrawColor(1);                             // Ripristino del display in modalità scrittura
+}
+
+void standByWrite() {
+
+  bufferPosition = 0;
+  lowerDisplayPosition = 0;
+
+  digitalWrite(ledStartPin, 1);
+  digitalWrite(ledStopPin, 0);
+
+  pulireStandBy = true;
+
+  u8g2_prepare(u8g2_font_pxplusibmcga_8r); //definisce le caratteristiche del display (per es. il font)
+
+  u8g2.setDrawColor(0);                             // 0 significa: "cancella pixel"
+  u8g2.drawBox(0, 0, 128, 300);                      // Disegno di una casella che cancella tutta lo schermo
+
+  u8g2.setCursor(0, 30);         // Setta la posizione bassa del display in cui print dovrà scrivere
+
+  u8g2.setDrawColor(1);                             // Ripristino del display in modalità scrittura
+  u8g2.print("in ascolto...");   // scrittura della lettera decodificata
+
+  u8g2.updateDisplay();
+
 }
