@@ -9,7 +9,7 @@
 U8G2_SH1106_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0, U8X8_PIN_NONE); //Costruttore display
 int upperDisplayPosition = 0;                                    //contatore per visualizzare i punti e le linee in sequenza sul display
 int lowerDisplayPosition = 0;                                    //contatore per visualizzare le lettere in sequenza sul display
-
+//prova
 /*------------------------------------------BUTTON------------------------------------------*/
 const int buttonPin = D6; //Nom
 const int ledStartPin = D3; //Nom
